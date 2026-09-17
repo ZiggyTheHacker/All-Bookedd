@@ -14,8 +14,11 @@ export default async function AdminUsersPage() {
     orderBy: { createdAt: "desc" },
   });
 
-  const serialized = members.map((m) => ({ ...m, createdAt: m.createdAt.toISOString() }));
-
+  const serialized = members.map((m) => ({
+  ...m,
+  createdAt: m.createdAt.toISOString(),
+  role: m.role as "ADMIN" | "MEMBER",
+}));
   return (
     <div>
       <h2 className="mb-6 text-xl">Members</h2>
