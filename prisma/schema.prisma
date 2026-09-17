@@ -1,0 +1,164 @@
+// Prisma schema for The Gilded Spine book club site.
+// Dev uses SQLite (zero setup). For production, switch provider to
+// "postgresql" and point DATABASE_URL at a free Neon/Supabase database —
+// see README.md for the two-line change needed.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Role is a plain string ("MEMBER" | "ADMIN") rather than a Prisma enum,
+// because the SQLite connector used for local dev doesn't support enums.
+// If you switch to Postgres for production, this still works fine as-is.
+
+model User {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  passwordHash  String
+  role          String         @default("MEMBER")
+  avatar        String         @default("scholar")
+  bio           String?
+  createdAt     DateTime       @default(now())
+  reviews       Review[]
+  shelfEntries  ShelfEntry[]
+  bookRequests  BookRequest[]
+  requestVotes  RequestVote[]
+  resetTokens   PasswordResetToken[]
+  comments      Comment[]
+}
+
+// Single row (id always "singleton") holding club-wide settings editable from
+// the admin dashboard, like the registration access code.
+model ClubSettings {
+  id         String   @id @default("singleton")
+  accessCode String   @default("572157")
+  updatedAt  DateTime @updatedAt
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// A member's petition for a book they'd like the club to add.
+model BookRequest {
+  id             String        @id @default(cuid())
+  title          String
+  author         String?
+  reason         String?
+  status         String        @default("PENDING") // PENDING | APPROVED | FULFILLED | DECLINED
+  requestedBy    User          @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+  requestedById  String
+  createdAt      DateTime      @default(now())
+  votes          RequestVote[]
+}
+
+// One member can "second" (upvote) a given petition once. Lets the club
+// surface the most-wanted requests instead of relying purely on admin
+// judgement of what's popular.
+model RequestVote {
+  id            String      @id @default(cuid())
+  bookRequest   BookRequest @relation(fields: [bookRequestId], references: [id], onDelete: Cascade)
+  bookRequestId String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  createdAt     DateTime    @default(now())
+
+  @@unique([bookRequestId, userId])
+}
+
+model Book {
+  id              String        @id @default(cuid())
+  title           String
+  author          String
+  coverUrl        String
+  genre           String
+  description     String
+  publishedYear   Int
+  pages           Int
+  fileUrl         String?
+  createdAt       DateTime      @default(now())
+  reviews         Review[]
+  shelfEntries    ShelfEntry[]
+  featuredDates   FeaturedBook[]
+  comments        Comment[]
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int
+  content   String
+  createdAt DateTime @default(now())
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  bookId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+
+  @@unique([bookId, userId])
+}
+
+// Freeform discussion under a book, separate from star reviews — meant for
+// back-and-forth between members rather than a one-time verdict. Flat
+// (no nested replies) for now.
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  bookId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+}
+
+model ShelfEntry {
+  id              String      @id @default(cuid())
+  status          String      @default("WANT_TO_READ")
+  addedAt         DateTime    @default(now())
+  statusUpdatedAt DateTime    @default(now())
+  book            Book        @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  bookId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+
+  @@unique([bookId, userId])
+}
+
+// One row per calendar date that has been assigned a "Book of the Day".
+// The most recent row with date <= today is the current pick.
+model FeaturedBook {
+  id     String   @id @default(cuid())
+  date   DateTime @unique
+  book   Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  bookId String
+  note   String?
+}
+
+model Event {
+  id            String   @id @default(cuid())
+  title         String
+  description   String
+  date          DateTime
+  location      String
+  createdAt     DateTime @default(now())
+  recap         String?
+  recapImageUrl String?
+}
+
+model Quote {
+  id        String   @id @default(cuid())
+  text      String
+  author    String
+  book      String?
+  createdAt DateTime @default(now())
+}
